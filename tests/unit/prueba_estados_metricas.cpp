@@ -75,3 +75,22 @@ PRUEBA(metricas_anexar_crea_encabezado_una_vez) {
     for (char c : contenido) lineas += (c == '\n');
     VERIFICAR_IGUAL(lineas, static_cast<std::size_t>(3));
 }
+
+PRUEBA(estados_respuesta_rapida_salta_de_stt_a_tts) {
+    VERIFICAR(transicion_valida(Estado::Stt, Estado::Tts));
+    VERIFICAR(!transicion_valida(Estado::Grabando, Estado::Slm));
+}
+
+PRUEBA(metricas_csv_viejo_se_conserva_aparte) {
+    DirTemporal dir("jarvis-prueba");
+    const std::string ruta = dir.archivo("metricas.csv");
+    VERIFICAR(escribir_archivo(ruta, "fecha,perfil,columna_vieja\nx,base,1\n"));
+    MetricasTurno m;
+    m.ruta = "atajo";
+    VERIFICAR(anexar_metricas(ruta, m));
+    std::string nuevo;
+    VERIFICAR(leer_archivo(ruta, nuevo));
+    VERIFICAR(nuevo.rfind(encabezado_csv(), 0) == 0);
+    VERIFICAR(nuevo.find(",atajo\n") != std::string::npos);
+    VERIFICAR(existe_archivo(ruta + ".anterior"));
+}

@@ -26,13 +26,15 @@ struct MetricasTurno {
     long rss_stt_kb = 0;
     long rss_slm_kb = 0;
     long rss_tts_kb = 0;
-    std::string motor_tts;  // "sherpa" o "termux"
+    std::string motor_tts;     // "sherpa" o "termux"
+    std::string ruta = "slm";  // "slm", "atajo" o "bloqueo" (respuesta sin SLM)
 };
 
 std::string encabezado_csv();
 std::string fila_csv(const MetricasTurno& m);
 
 // Agrega la fila al CSV; crea el directorio y el encabezado si no existen.
+// Si el CSV tiene un encabezado viejo, lo renombra a <archivo>.anterior.
 bool anexar_metricas(const std::string& ruta, const MetricasTurno& m);
 
 }  // namespace jarvis

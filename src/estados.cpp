@@ -19,7 +19,8 @@ bool transicion_valida(Estado desde, Estado hacia) {
     switch (desde) {
         case Estado::Listo: return hacia == Estado::Grabando;
         case Estado::Grabando: return hacia == Estado::Stt;
-        case Estado::Stt: return hacia == Estado::Slm;
+        // STT → TTS solo ocurre con una respuesta rápida (se omite el SLM).
+        case Estado::Stt: return hacia == Estado::Slm || hacia == Estado::Tts;
         case Estado::Slm: return hacia == Estado::Tts;
         case Estado::Tts: return hacia == Estado::Listo;
         case Estado::Error: return hacia == Estado::Listo;

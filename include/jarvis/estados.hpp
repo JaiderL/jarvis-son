@@ -1,4 +1,5 @@
 // Máquina de estados del turno: LISTO → GRABANDO → STT → SLM → TTS → LISTO.
+// Con una respuesta rápida el turno salta STT → TTS (sin cargar el SLM).
 // Cualquier etapa puede pasar a ERROR, y ERROR vuelve a LISTO.
 #pragma once
 
