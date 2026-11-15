@@ -39,6 +39,67 @@
     "permitir_respaldo_termux": false
   },
 
+  "respuestas_rapidas": {
+    "activado": true,
+    "max_palabras": 6,
+    "tolerancia_errores": true,
+    "reglas": [
+      {
+        "id": "saludo",
+        "modo": "exacta",
+        "frases": ["hola", "hola jarvis", "buenas", "buenos dias", "buenas tardes", "buenas noches", "hey jarvis"],
+        "respuestas": ["¡Hola! ¿En qué te puedo ayudar?", "¡Hola! Dime, ¿qué necesitas?"]
+      },
+      {
+        "id": "como_estas",
+        "modo": "exacta",
+        "frases": ["como estas", "hola como estas", "hola jarvis como estas", "que tal", "hola que tal", "como vas"],
+        "respuestas": ["Muy bien, gracias. ¿En qué te ayudo?", "¡Todo bien por aquí! ¿Qué necesitas?"]
+      },
+      {
+        "id": "hora",
+        "modo": "exacta",
+        "frases": ["que hora es", "que horas son", "dime la hora", "me dices la hora", "sabes que hora es", "jarvis que hora es"],
+        "respuesta_dinamica": "hora"
+      },
+      {
+        "id": "fecha",
+        "modo": "exacta",
+        "frases": ["que fecha es hoy", "que dia es hoy", "dime la fecha", "a cuanto estamos hoy"],
+        "respuesta_dinamica": "fecha"
+      },
+      {
+        "id": "quien_eres",
+        "modo": "exacta",
+        "frases": ["quien eres", "como te llamas", "que eres", "quien eres tu"],
+        "respuestas": ["Soy Jarvis-son, un asistente de voz que funciona sin internet en este teléfono."]
+      },
+      {
+        "id": "repetir",
+        "modo": "exacta",
+        "frases": ["repite", "repitelo", "repite por favor", "que dijiste", "no te entendi"],
+        "respuesta_dinamica": "ultima_respuesta"
+      },
+      {
+        "id": "gracias",
+        "modo": "exacta",
+        "frases": ["gracias", "muchas gracias", "gracias jarvis", "listo gracias"],
+        "respuestas": ["¡Con gusto!", "¡A la orden!"]
+      },
+      {
+        "id": "despedida",
+        "modo": "exacta",
+        "frases": ["adios", "chao", "hasta luego", "adios jarvis", "chao jarvis", "eso es todo"],
+        "respuestas": ["¡Hasta luego!"],
+        "terminar": true
+      }
+    ],
+    "temas_bloqueados": {
+      "frases": ["contraseña", "numero de tarjeta", "clave del banco", "codigo de verificacion"],
+      "respuesta": "Por seguridad no manejo contraseñas, claves ni datos bancarios."
+    }
+  },
+
   "metricas": {
     "archivo": "logs/metricas.csv"
   },

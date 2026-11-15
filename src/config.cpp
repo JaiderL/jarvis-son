@@ -71,6 +71,89 @@ bool nombre_perfil_valido(const std::string& p) {
     return true;
 }
 
+// Lista de textos no vacíos (cada uno <= max bytes); se normaliza si se pide.
+std::vector<std::string> lista_textos(const ValorJson& obj, const std::string& clave,
+                                      const std::string& contexto, bool normalizar,
+                                      std::size_t max = 300) {
+    std::vector<std::string> v;
+    const ValorJson* a = obj.buscar(clave);
+    if (a == nullptr) return v;
+    if (a->tipo != ValorJson::Tipo::Arreglo)
+        fallar(contexto + "." + clave + " debe ser un arreglo");
+    for (const auto& e : a->arreglo) {
+        if (e.tipo != ValorJson::Tipo::Texto || e.texto.empty() || e.texto.size() > max)
+            fallar(contexto + "." + clave + " contiene un texto vacío o demasiado largo");
+        std::string t = normalizar ? normalizar_frase(e.texto) : e.texto;
+        if (t.empty()) fallar(contexto + "." + clave + " contiene un texto sin letras");
+        v.push_back(t);
+    }
+    return v;
+}
+
+// Sección opcional "respuestas_rapidas". Si no existe, los atajos quedan
+// desactivados y todo va al SLM (compatibilidad con configuraciones viejas).
+ConfigAtajos cargar_atajos(const ValorJson& j) {
+    ConfigAtajos a;
+    const ValorJson* s = j.buscar("respuestas_rapidas");
+    if (s == nullptr) return a;
+    if (s->tipo != ValorJson::Tipo::Objeto) fallar("\"respuestas_rapidas\" debe ser un objeto");
+    a.activado = booleano(j, "respuestas_rapidas.activado");
+    a.max_palabras = entero(j, "respuestas_rapidas.max_palabras", 1, 15);
+    a.tolerancia_errores = booleano(j, "respuestas_rapidas.tolerancia_errores");
+
+    const ValorJson* reglas = s->buscar("reglas");
+    if (reglas == nullptr || reglas->tipo != ValorJson::Tipo::Arreglo)
+        fallar("\"respuestas_rapidas.reglas\" debe ser un arreglo");
+    for (std::size_t i = 0; i < reglas->arreglo.size(); ++i) {
+        const ValorJson& r = reglas->arreglo[i];
+        const std::string ctx = "respuestas_rapidas.reglas[" + std::to_string(i) + "]";
+        if (r.tipo != ValorJson::Tipo::Objeto) fallar(ctx + " debe ser un objeto");
+        ReglaAtajo regla;
+        const ValorJson* id = r.buscar("id");
+        const ValorJson* modo = r.buscar("modo");
+        if (id == nullptr || id->tipo != ValorJson::Tipo::Texto || id->texto.empty())
+            fallar(ctx + " necesita un \"id\"");
+        if (modo == nullptr || modo->tipo != ValorJson::Tipo::Texto)
+            fallar(ctx + " necesita un \"modo\"");
+        regla.id = id->texto;
+        regla.modo = modo->texto;
+        regla.frases = lista_textos(r, "frases", ctx, true);
+        regla.todas = lista_textos(r, "todas", ctx, true);
+        regla.alguna = lista_textos(r, "alguna", ctx, true);
+        regla.respuestas = lista_textos(r, "respuestas", ctx, false);
+        if (const ValorJson* d = r.buscar("respuesta_dinamica")) {
+            if (d->tipo != ValorJson::Tipo::Texto ||
+                (d->texto != "hora" && d->texto != "fecha" && d->texto != "ultima_respuesta"))
+                fallar(ctx + ".respuesta_dinamica debe ser hora, fecha o ultima_respuesta");
+            regla.dinamica = d->texto;
+        }
+        if (const ValorJson* t = r.buscar("terminar")) {
+            if (t->tipo != ValorJson::Tipo::Booleano) fallar(ctx + ".terminar debe ser booleano");
+            regla.terminar = t->booleano;
+        }
+        if (regla.modo == "exacta") {
+            if (regla.frases.empty()) fallar(ctx + " (modo exacta) necesita \"frases\"");
+        } else if (regla.modo == "palabras_clave") {
+            if (regla.todas.empty()) fallar(ctx + " (modo palabras_clave) necesita \"todas\"");
+        } else {
+            fallar(ctx + ".modo debe ser \"exacta\" o \"palabras_clave\"");
+        }
+        if (regla.respuestas.empty() && regla.dinamica.empty())
+            fallar(ctx + " necesita \"respuestas\" o \"respuesta_dinamica\"");
+        a.reglas.push_back(regla);
+    }
+
+    if (const ValorJson* b = s->buscar("temas_bloqueados")) {
+        if (b->tipo != ValorJson::Tipo::Objeto)
+            fallar("respuestas_rapidas.temas_bloqueados debe ser un objeto");
+        a.temas_bloqueados =
+            lista_textos(*b, "frases", "respuestas_rapidas.temas_bloqueados", true);
+        if (!a.temas_bloqueados.empty())
+            a.respuesta_bloqueo = texto(j, "respuestas_rapidas.temas_bloqueados.respuesta");
+    }
+    return a;
+}
+
 }  // namespace
 
 std::string resolver_ruta(const std::string& raiz, const std::string& ruta) {
@@ -133,6 +216,8 @@ Config cargar_config(const std::string& ruta, const std::string& perfil_pedido) 
     if (c.motor_tts != "sherpa" && c.motor_tts != "termux")
         fallar("\"tts.motor\" debe ser \"sherpa\" o \"termux\"");
     c.permitir_respaldo_termux = booleano(j, "tts.permitir_respaldo_termux");
+
+    c.atajos = cargar_atajos(j);
 
     c.archivo_metricas = resolver_ruta(c.raiz, texto(j, "metricas.archivo"));
     if (c.archivo_metricas.find('/') == std::string::npos)
