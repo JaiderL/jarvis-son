@@ -1,0 +1,34 @@
+# Pesos de modelos y voces: NUNCA se suben (ver models/manifest.json)
+models/*
+!models/manifest.json
+!models/README.md
+*.gguf
+*.onnx
+*.tar.bz2
+ggml-*.bin
+
+# Dependencias compiladas en el teléfono
+third_party/
+
+# Compilación
+build/
+build-*/
+cmake-build-*/
+compile_commands.json
+
+# Registros y audio (privacidad: no se guarda audio ni conversación)
+logs/
+*.wav
+*.m4a
+*.mp3
+
+# Python
+__pycache__/
+*.pyc
+
+# Editores y sistema
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
