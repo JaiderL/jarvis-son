@@ -14,7 +14,9 @@ flowchart LR
         STT["STT<br/>whisper-cli<br/>ggml-tiny.bin, -l es"]
         SLM["SLM<br/>llama-completion<br/>Qwen3.5-0.8B Q4_0"]
         TTS["TTS<br/>sherpa-onnx-offline-tts<br/>Piper es_MX + play-audio"]
-        MIC -->|WAV temporal| STT -->|texto| SLM -->|texto| TTS
+        MIC -->|WAV temporal| STT -->|texto| ATA{"¿Respuesta rápida?<br/>(atajos.cpp)"}
+        ATA -->|no| SLM -->|texto| TTS
+        ATA -->|"sí: hola, hora, fecha..."| TTS
     end
     TTS -->|audio| U
     STT -.métricas.-> CSV[(logs/metricas.csv)]
@@ -29,7 +31,8 @@ stateDiagram-v2
     [*] --> LISTO
     LISTO --> GRABANDO: Enter (o --auto)
     GRABANDO --> STT: WAV válido (5–8 s, s16le, mono, 16 kHz, RMS > mínimo)
-    STT --> SLM: transcripción no vacía
+    STT --> SLM: transcripción no vacía y sin respuesta rápida
+    STT --> TTS: respuesta rápida (no se carga el SLM)
     SLM --> TTS: respuesta limpia (sin &lt;think&gt;)
     TTS --> LISTO: audio reproducido
     GRABANDO --> ERROR
@@ -72,6 +75,7 @@ Códigos especiales: `124` = tiempo límite superado, `127` = binario no encontr
 | `slm.{hpp,cpp}` | Etapa SLM |
 | `tts.{hpp,cpp}` | Etapa TTS (+ respaldo `termux-tts-speak` solo de demostración) |
 | `metricas.{hpp,cpp}` | Escribe `logs/metricas.csv` |
+| `atajos.{hpp,cpp}` | Respuestas rápidas: normaliza la frase, la compara con las reglas de `config.json` (exacta o palabras clave, con tolerancia a 1 error) y responde sin SLM; hora/fecha dinámicas y temas bloqueados |
 | `orquestador.{hpp,cpp}` | Encadena las etapas y aplica la máquina de estados |
 | `main.cpp` | Argumentos de línea de comandos y bucle de turnos |
 
@@ -99,8 +103,10 @@ Columnas de `logs/metricas.csv`:
 ```
 fecha,perfil,turno,estado,etapa_error,codigo_error,ms_grabacion,ms_conversion,ms_stt,ms_slm,
 ms_tts,ms_reproduccion,ms_total,duracion_audio_s,rtf_stt,rss_ffmpeg_kb,rss_stt_kb,rss_slm_kb,
-rss_tts_kb,motor_tts
+rss_tts_kb,motor_tts,ruta
 ```
+
+`ruta` = `slm` (pasó por Qwen), `atajo` (respuesta rápida) o `bloqueo` (tema bloqueado).
 
 `rtf_stt` = tiempo de whisper / duración del audio (menor que 1 = más rápido que tiempo real).
 

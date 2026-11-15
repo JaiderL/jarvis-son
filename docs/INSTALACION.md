@@ -17,6 +17,7 @@ Cada comando va en su propio bloque; debajo aparece la **salida esperada** (apro
 | `descargar_modelos.sh base` (descarga, SHA-256, extracción de la voz, idempotencia) | ✅ en Linux · 📱 en Termux |
 | STT, SLM y TTS reales con los modelos del perfil `base`, **sin red** | ✅ en Linux x86_64 · 📱 en Termux |
 | Termux:API (micrófono, `termux-battery-status`), `play-audio`, latencias en 3 GB, modo avión | 📱 |
+| Respuestas rápidas (atajos sin SLM): reglas, tolerancia, temas bloqueados, fin de sesión | ✅ |
 | Perfil `alto` (Qwen3.5-2B, whisper base, voz high) | 📱 (solo se verificó la configuración en CI) |
 
 ---
@@ -492,6 +493,81 @@ sherpa-onnx                             165
 
 > Los números son ilustrativos: anote los reales en la plantilla de la sección 9.
 
+### 5.9 Respuestas rápidas (sin pasar por Qwen)
+
+Las frases cortas y frecuentes ("hola", "¿cómo estás?", "¿qué hora es?", "gracias", "adiós") se
+responden directamente en C++, **sin cargar el modelo de lenguaje**. Así se ahorran ~940 MB de RAM
+y varios segundos en ese turno. La hora y la fecha salen del reloj del teléfono (Qwen no las sabe
+y las inventaría).
+
+Para ver si una frase tendría respuesta rápida, sin micrófono:
+
+```bash
+./build/jarvis --prueba atajo --texto "Hola, ¿cómo estás?"
+```
+
+Salida esperada:
+
+```
+ATAJO id=como_estas
+RESPUESTA: Muy bien, gracias. ¿En qué te ayudo?
+```
+
+```bash
+./build/jarvis --prueba atajo --texto "¿A qué hora abre el banco?"
+```
+
+Salida esperada:
+
+```
+SIN_ATAJO: la frase "a que hora abre el banco" iría al SLM
+```
+
+En el orquestador se ve así (no aparece el estado `[SLM]`):
+
+```
+[STT]
+  Usted: Hola, ¿cómo estás?
+  Jarvis (respuesta rápida: como_estas): Muy bien, gracias. ¿En qué te ayudo?
+[TTS]
+```
+
+**Cómo configurarlas** (sección `respuestas_rapidas` de `config/config.json`):
+
+| Clave | Qué hace |
+|---|---|
+| `activado` | `false` = todo va a Qwen, como antes |
+| `max_palabras` | Solo se buscan atajos en frases de hasta N palabras (6 por defecto). "Hola, explícame la fotosíntesis" sí va a Qwen |
+| `tolerancia_errores` | Acepta 1 letra de diferencia en palabras de 4+ letras ("ola" ≈ "hola"), por errores de whisper |
+| `reglas[].modo` | `exacta`: la frase completa debe coincidir. `palabras_clave`: deben aparecer todas las de `todas` y al menos una de `alguna` |
+| `reglas[].frases` | Frases que activan la regla. Se comparan **sin tildes, sin signos y en minúsculas** |
+| `reglas[].respuestas` | Una o varias; se van rotando entre turnos |
+| `reglas[].respuesta_dinamica` | `hora`, `fecha` o `ultima_respuesta` (para "repite"; se guarda solo en memoria) |
+| `reglas[].terminar` | `true` = la sesión interactiva termina después de responder ("adiós") |
+| `temas_bloqueados` | Si la frase contiene alguno (sin importar su longitud), responde el texto fijo y nunca llega a Qwen |
+
+Ejemplo para agregar una regla propia (respete las comas entre reglas):
+
+```json
+{
+  "id": "nombre_proyecto",
+  "modo": "exacta",
+  "frases": ["como se llama este proyecto", "que proyecto es este"],
+  "respuestas": ["Este proyecto se llama Jarvis-son."]
+}
+```
+
+Después de editar, compruebe que el archivo sigue siendo válido (si hay un error, `jarvis` dice
+qué regla falla):
+
+```bash
+./build/jarvis --prueba atajo --texto "como se llama este proyecto"
+```
+
+> Consejo: use reglas **exactas** y pocas. Reglas muy amplias (p. ej. cualquier frase con "hora")
+> responderían mal preguntas como "¿a qué hora abre el banco?". En el CSV, la columna `ruta`
+> (`slm`, `atajo` o `bloqueo`) muestra cuántos turnos se resolvieron sin Qwen.
+
 ---
 
 ## 6. Cambiar al perfil "alto" (teléfono con mejores características)
@@ -559,6 +635,7 @@ Salida esperada: los 3 turnos terminan en `[LISTO]` sin errores, igual que con r
 | La respuesta trae razonamiento en inglés o `<think>` | Se cambió el formato del prompt | El orquestador usa `-no-cnv` con el bloque `<think></think>` vacío; no agregue `--jinja` ni `-sys` (ver DECISIONES.md) |
 | No se escucha la voz | Volumen multimedia en 0, falta `play-audio` o la voz no está descargada | Suba el volumen multimedia, `pkg install play-audio`, `bash scripts/probar_tts.sh`. Para descartar el altavoz: `bash scripts/probar_tts.sh --respaldo` |
 | `sherpa-onnx`: `phoneme_codepoints is empty ... no frontend available` | Se compiló sherpa-onnx v2.x (quitó espeak-ng) | Use la versión fijada v1.13.8: `bash scripts/instalar.sh --forzar` |
+| Una pregunta recibe una respuesta rápida que no corresponde | Una regla de `respuestas_rapidas` es demasiado amplia | Pruebe la frase con `./build/jarvis --prueba atajo --texto "..."` y ajuste o quite la regla (o ponga `"activado": false`) |
 | "grabación vacía" o RMS ~0 | Sin permiso de micrófono, otra app usa el micrófono o se habló muy lejos | *Ajustes → Apps → Termux:API → Permisos → Micrófono*. Cierre apps de llamadas/grabación. `bash scripts/probar_api.sh` |
 | "duración ... fuera del rango [5.0, 8.0]" | La grabación se cortó antes | Revise que Termux:API no esté restringida por batería; reintente |
 | `pkg update` falla o es muy lento | Espejo caído | `termux-change-repo` y elija otro espejo |

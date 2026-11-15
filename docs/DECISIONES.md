@@ -126,3 +126,24 @@ el teléfono real.
 - **Calidad observada del 0.8B (✅ Linux):** responde breve y en español, pero comete errores
   factuales y aritméticos (p. ej. "12 / 8 = 1.5" para "doce por ocho"). Es una limitación del
   modelo, no del orquestador; documentarla en el informe.
+
+## D13. Respuestas rápidas en C++ antes del SLM
+
+- **Contexto:** cargar Qwen cuesta ~940 MB de RAM y varios segundos por turno, aunque la frase sea
+  "hola". Además Qwen no conoce la hora ni la fecha y las inventaría.
+- **Decisión:** después de STT, `buscar_atajo()` (`src/atajos.cpp`) compara la transcripción
+  normalizada (minúsculas, sin tildes ni signos) con reglas de `config.json`. Si coincide, el turno
+  salta **STT → TTS** sin cargar el SLM. La hora y la fecha se calculan con el reloj del teléfono.
+- **Restricciones para no responder mal:**
+  - Solo frases de hasta `max_palabras` (6). "Hola, explícame la fotosíntesis" va a Qwen.
+  - Por defecto, reglas `exacta`. La tolerancia acepta 1 error por palabra solo en palabras de
+    4+ letras ("ola" ≈ "hola", pero "de" ≠ "que").
+  - `temas_bloqueados` se revisa siempre y responde un texto fijo (contraseñas, datos bancarios).
+- **Privacidad:** "repite" usa la última respuesta guardada **solo en memoria**. El CSV registra
+  la columna `ruta` (`slm`, `atajo`, `bloqueo`), no el texto ni el id de la regla.
+- **Compatibilidad:** si `config.json` no tiene la sección, los atajos quedan desactivados. Si
+  `logs/metricas.csv` tiene el encabezado anterior, se renombra a `metricas.csv.anterior`.
+- **Verificación:** ✅ Linux: pruebas unitarias (normalización, tolerancia, rotación, hora/fecha,
+  temas bloqueados, configuración inválida) e integración (el "SLM" es un binario que falla, y el
+  turno con "hola" igual termina bien porque nunca lo ejecuta). 📱 Medir el ahorro real en el
+  teléfono comparando `ms_total` por ruta en `prueba_aceptacion.sh`.
