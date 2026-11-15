@@ -1,0 +1,70 @@
+{
+  "version": 1,
+  "perfil_activo": "base",
+
+  "binarios": {
+    "whisper": "third_party/whisper.cpp/build/bin/whisper-cli",
+    "llama": "third_party/llama.cpp/build/bin/llama-completion",
+    "sherpa_tts": "third_party/sherpa-onnx/build/bin/sherpa-onnx-offline-tts",
+    "ffmpeg": "ffmpeg",
+    "grabar": "termux-microphone-record",
+    "reproducir": "play-audio",
+    "tts_respaldo": "termux-tts-speak"
+  },
+
+  "grabacion": {
+    "segundos": 6,
+    "duracion_min_s": 5.0,
+    "duracion_max_s": 8.0,
+    "rms_minimo": 50.0,
+    "timeout_termux_s": 15
+  },
+
+  "tiempos_limite_s": {
+    "conversion": 30,
+    "stt": 120,
+    "slm": 240,
+    "tts": 90,
+    "reproduccion": 60
+  },
+
+  "slm": {
+    "temperatura": 0.3,
+    "prompt_sistema": "Eres Jarvis-son, un asistente de voz. Responde siempre en español latino neutro, de forma breve y clara: máximo dos oraciones cortas, sin listas, sin emojis, sin markdown y sin mostrar razonamiento.",
+    "args_extra_llama": []
+  },
+
+  "tts": {
+    "motor": "sherpa",
+    "permitir_respaldo_termux": false
+  },
+
+  "metricas": {
+    "archivo": "logs/metricas.csv"
+  },
+
+  "perfiles": {
+    "base": {
+      "descripcion": "Teléfono de 3 GB de RAM",
+      "modelo_stt": "models/ggml-tiny.bin",
+      "stt_beam": 1,
+      "modelo_slm": "models/Qwen3.5-0.8B-Q4_0.gguf",
+      "contexto": 1024,
+      "salida_tokens": 96,
+      "hilos": 4,
+      "voz_dir": "models/vits-piper-es_MX-ald-medium",
+      "voz_modelo": "es_MX-ald-medium.onnx"
+    },
+    "alto": {
+      "descripcion": "Teléfono con mejores características (6 GB de RAM o más)",
+      "modelo_stt": "models/ggml-base.bin",
+      "stt_beam": 2,
+      "modelo_slm": "models/Qwen3.5-2B-Q4_K_M.gguf",
+      "contexto": 2048,
+      "salida_tokens": 128,
+      "hilos": 6,
+      "voz_dir": "models/vits-piper-es_MX-claude-high",
+      "voz_modelo": "es_MX-claude-high.onnx"
+    }
+  }
+}
