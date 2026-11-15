@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  compilar:
+    name: Compilar y probar (${{ matrix.compilador }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        compilador: [clang++, g++]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar dependencias
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq cmake clang ffmpeg
+
+      - name: Configurar con CMake
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=${{ matrix.compilador }} -DJARVIS_WERROR=ON
+
+      - name: Compilar
+        run: cmake --build build -j 2
+
+      - name: Pruebas (unitarias e integración con binarios falsos)
+        run: ctest --test-dir build --output-on-failure
+
+  calidad:
+    name: Formato, seguridad y scripts
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar herramientas
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq clang-format-18 shellcheck jq python3
+
+      - name: Revisar formato con clang-format
+        run: |
+          archivos=$(git ls-files '*.cpp' '*.hpp')
+          [ -z "$archivos" ] && exit 0
+          clang-format-18 --dry-run --Werror $archivos
+
+      - name: Prohibir system() y popen()
+        run: |
+          if grep -rnE '(^|[^_[:alnum:]])(std::)?(system|popen|execl|execlp)[[:space:]]*\(' src include; then
+            echo "::error::Se encontró system(), popen() o execl*: use jarvis::ejecutar (fork/execvp con argv fijo)."
+            exit 1
+          fi
+          echo "OK: no hay llamadas a system()/popen()."
+
+      - name: Revisar scripts con shellcheck
+        run: |
+          scripts=$(git ls-files '*.sh')
+          [ -z "$scripts" ] && exit 0
+          shellcheck -x -S warning $scripts
+
+      - name: Validar JSON
+        run: |
+          for f in $(git ls-files '*.json'); do jq empty "$f" && echo "OK $f"; done
+
+      - name: Autopruebas de Python
+        run: |
+          for f in tests/calcular_wer.py tests/reporte_latencias.py; do
+            if [ -f "$f" ]; then python3 "$f" --autoprueba; fi
+          done
+
+      - name: Verificar que no se suben pesos
+        run: |
+          if git ls-files | grep -E '\.(gguf|bin|onnx|tar\.bz2)$'; then
+            echo "::error::No se deben subir pesos de modelos al repositorio."
+            exit 1
+          fi
