@@ -2,10 +2,13 @@
 // Flujo: MIC → STT (whisper.cpp) → SLM (llama.cpp) → TTS (sherpa-onnx/Piper).
 #include <cstdio>
 #include <cstdlib>
+#include <ctime>
 #include <iostream>
+#include <optional>
 #include <stdexcept>
 #include <string>
 
+#include "jarvis/atajos.hpp"
 #include "jarvis/captura.hpp"
 #include "jarvis/config.hpp"
 #include "jarvis/orquestador.hpp"
@@ -28,8 +31,8 @@ Opciones:
   --turnos N        Número de turnos (0 = interactivo sin límite; por defecto 0)
   --auto            No espera Enter entre turnos (pruebas de aceptación)
   --wav RUTA        Usa este audio en lugar del micrófono
-  --prueba ETAPA    Prueba una sola etapa: captura | stt | slm | tts
-  --texto TEXTO     Texto de entrada para --prueba slm o --prueba tts
+  --prueba ETAPA    Prueba una sola etapa: captura | stt | atajo | slm | tts
+  --texto TEXTO     Texto de entrada para --prueba atajo, slm o tts
   --sin-metricas    No escribe logs/metricas.csv
   --version         Muestra la versión
   --ayuda           Muestra esta ayuda
@@ -69,6 +72,18 @@ int prueba_etapa(const jarvis::Config& c, const std::string& etapa, const std::s
         std::cerr << "Falta --texto para --prueba " << etapa << "\n";
         return 2;
     }
+    if (etapa == "atajo") {
+        // Muestra si la frase tendría respuesta rápida o iría al SLM.
+        ContextoAtajo ctx;
+        ctx.ahora = std::time(nullptr);
+        if (std::optional<Atajo> a = buscar_atajo(c.atajos, texto, ctx)) {
+            std::cout << "ATAJO id=" << a->id << (a->terminar ? " (termina la sesión)" : "")
+                      << "\nRESPUESTA: " << a->respuesta << "\n";
+        } else {
+            std::cout << "SIN_ATAJO: la frase \"" << normalizar_frase(texto) << "\" iría al SLM\n";
+        }
+        return 0;
+    }
     if (etapa == "slm") {
         ResultadoSlm slm = generar_respuesta(c, dir, texto);
         if (!slm.ok) {
@@ -89,7 +104,7 @@ int prueba_etapa(const jarvis::Config& c, const std::string& etapa, const std::s
                     tts.motor.c_str(), tts.ms_sintesis, tts.ms_reproduccion, tts.rss_kb / 1024.0);
         return 0;
     }
-    std::cerr << "Etapa desconocida: " << etapa << " (use captura | stt | slm | tts)\n";
+    std::cerr << "Etapa desconocida: " << etapa << " (use captura | stt | atajo | slm | tts)\n";
     return 2;
 }
 
@@ -179,6 +194,11 @@ int main(int argc, char** argv) {
             ++exitos;
         else
             ++fallas;
+        // "Adiós" termina la sesión, salvo en pruebas con un número fijo de turnos.
+        if (orquestador.salir_solicitado() && !(automatico && turnos > 0)) {
+            std::cout << "Sesión terminada por el usuario.\n";
+            break;
+        }
     }
     std::cout << "\nTurnos exitosos: " << exitos << " | con error: " << fallas << "\n";
     return fallas == 0 ? 0 : 1;

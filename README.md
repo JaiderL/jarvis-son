@@ -12,6 +12,8 @@ termux-microphone-record + FFmpeg │ whisper.cpp (tiny, -l es) │ llama.cpp (Q
 - **Funciona en modo avión** una vez descargados los modelos.
 - **Seguro:** sin `system()` ni `popen()`; los procesos se lanzan con `fork` + `execvp` y argv
   fijo. El texto del usuario va por archivo o como argumento separado, nunca por un shell.
+- **Respuestas rápidas:** "hola", "¿qué hora es?", "gracias" o "adiós" se responden en C++ sin
+  cargar Qwen (configurable en `config.json`, sección `respuestas_rapidas`).
 - **Privado:** `logs/metricas.csv` guarda solo tiempos y memoria; nunca audio ni texto.
 
 ## Inicio rápido (en Termux)

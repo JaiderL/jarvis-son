@@ -31,7 +31,12 @@ while [ $# -gt 0 ]; do
   case "$1" in -of) of="$2"; shift ;; -l) idioma="$2"; shift ;; esac; shift
 done
 [ "$idioma" = "es" ] || { echo "idioma incorrecto" >&2; exit 9; }
-printf ' [BLANK_AUDIO] ¿Qué hora es; rm -rf ~ && `id` $HOME?\n' > "$of.txt"
+# FALSO_TRANSCRIPCION permite a cada caso elegir lo que "dijo" el usuario.
+if [ -n "${FALSO_TRANSCRIPCION:-}" ]; then
+  printf '%s\n' "$FALSO_TRANSCRIPCION" > "$of.txt"
+else
+  printf ' [BLANK_AUDIO] ¿Qué hora es; rm -rf ~ && `id` $HOME?\n' > "$of.txt"
+fi
 EOF
 
 cat > "$TRABAJO/falsos/llama-completion" <<'EOF'
@@ -55,7 +60,8 @@ cat > "$TRABAJO/falsos/sherpa-onnx-offline-tts" <<'EOF'
 out=""
 for a in "$@"; do case "$a" in --output-filename=*) out="${a#--output-filename=}" ;; esac; done
 texto="${*: -1}"
-[ "$texto" = "Son las tres de la tarde." ] || { echo "texto inesperado: $texto" >&2; exit 9; }
+esperado="${FALSO_TTS_ESPERADO:-Son las tres de la tarde.}"
+[ "$texto" = "$esperado" ] || { echo "texto inesperado: $texto" >&2; exit 9; }
 ffmpeg -hide_banner -loglevel error -nostdin -y -f lavfi -i "sine=frequency=300:duration=1" \
   -ac 1 -ar 22050 -c:a pcm_s16le "$out"
 EOF
@@ -96,6 +102,13 @@ escribir_config() {
   "slm": {"temperatura": 0.3, "prompt_sistema": "Responde breve.",
           "args_extra_llama": []},
   "tts": {"motor": "sherpa", "permitir_respaldo_termux": false},
+  "respuestas_rapidas": {"activado": true, "max_palabras": 6, "tolerancia_errores": true,
+    "reglas": [
+      {"id": "saludo", "modo": "exacta", "frases": ["hola como estas"],
+       "respuestas": ["Muy bien, gracias."]},
+      {"id": "despedida", "modo": "exacta", "frases": ["adios"],
+       "respuestas": ["Hasta luego."], "terminar": true}],
+    "temas_bloqueados": {"frases": ["contraseña"], "respuesta": "No manejo contraseñas."}},
   "metricas": {"archivo": "logs/metricas.csv"},
   "perfiles": {"base": {"modelo_stt": "models/ggml-tiny.bin", "stt_beam": 1,
                "modelo_slm": "models/qwen.gguf", "contexto": 1024, "salida_tokens": 96,
@@ -146,6 +159,40 @@ set +e
 SALIDA="$("$JARVIS" --config "$TRABAJO/config/config.json" --turnos 1 --auto --wav "$CORTO" 2>&1)"
 set -e
 grep -qF "[ERROR] Etapa: GRABANDO" <<<"$SALIDA" || fallo "no se rechazó el audio corto"
+
+# --- Caso 4: respuesta rápida → STT pasa directo a TTS sin cargar el SLM -----
+# El "SLM" configurado es el binario que falla: si se ejecutara, el turno fallaría.
+escribir_config falla
+export FALSO_TRANSCRIPCION="¡Hola! ¿Cómo estás?" FALSO_TTS_ESPERADO="Muy bien, gracias."
+SALIDA="$("$JARVIS" --config "$TRABAJO/config/config.json" --turnos 1 --auto --wav "$ENTRADA" 2>&1)" \
+    || { echo "$SALIDA"; fallo "la respuesta rápida no debió cargar el SLM"; }
+echo "$SALIDA"
+grep -qF "respuesta rápida: saludo" <<<"$SALIDA" || fallo "no se usó la respuesta rápida"
+if grep -qF "[SLM]" <<<"$SALIDA"; then fallo "el turno pasó por el SLM"; fi
+[ "$(tail -n 1 "$CSV" | awk -F, '{print $NF}')" = "atajo" ] || fallo "la métrica no registró ruta=atajo"
+if grep -qi "hola\|muy bien" "$CSV"; then fallo "el CSV contiene texto de la conversación"; fi
+
+# --- Caso 5: frase con contenido → sí va al SLM (aquí falla a propósito) ------
+set +e
+export FALSO_TRANSCRIPCION="Hola, explícame la fotosíntesis"
+SALIDA="$("$JARVIS" --config "$TRABAJO/config/config.json" --turnos 1 --auto --wav "$ENTRADA" 2>&1)"
+set -e
+grep -qF "[ERROR] Etapa: SLM" <<<"$SALIDA" || fallo "una pregunta real debe ir al SLM"
+
+# --- Caso 6: tema bloqueado → respuesta fija, sin SLM -------------------------
+export FALSO_TRANSCRIPCION="Jarvis guarda mi contraseña del correo para mañana por favor"
+export FALSO_TTS_ESPERADO="No manejo contraseñas."
+SALIDA="$("$JARVIS" --config "$TRABAJO/config/config.json" --turnos 1 --auto --wav "$ENTRADA" 2>&1)" \
+    || { echo "$SALIDA"; fallo "el tema bloqueado no debió cargar el SLM"; }
+[ "$(tail -n 1 "$CSV" | awk -F, '{print $NF}')" = "bloqueo" ] || fallo "la métrica no registró ruta=bloqueo"
+
+# --- Caso 7: "adiós" termina una sesión sin límite de turnos -------------------
+export FALSO_TRANSCRIPCION="Adiós" FALSO_TTS_ESPERADO="Hasta luego."
+SALIDA="$(timeout 30 "$JARVIS" --config "$TRABAJO/config/config.json" --turnos 0 --auto --wav "$ENTRADA" 2>&1)" \
+    || { echo "$SALIDA"; fallo "la despedida no terminó la sesión"; }
+unset FALSO_TRANSCRIPCION FALSO_TTS_ESPERADO
+grep -qF "Sesión terminada por el usuario." <<<"$SALIDA" || fallo "falta el mensaje de fin de sesión"
+grep -qF "Turnos exitosos: 1 " <<<"$SALIDA" || fallo "la sesión debió terminar tras 1 turno"
 
 # --- Temporales borrados -----------------------------------------------------
 if [ -n "$(ls -A "$TMPDIR")" ]; then

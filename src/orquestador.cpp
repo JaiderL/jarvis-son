@@ -2,9 +2,12 @@
 
 #include <chrono>
 #include <cstdio>
+#include <ctime>
 #include <iostream>
+#include <optional>
 #include <utility>
 
+#include "jarvis/atajos.hpp"
 #include "jarvis/captura.hpp"
 #include "jarvis/slm.hpp"
 #include "jarvis/stt.hpp"
@@ -67,15 +70,31 @@ bool Orquestador::ejecutar_turno(int numero, const std::string& wav_entrada) {
             if (!stt.ok) return fallar(stt.fallo);
             std::cout << "  Usted: " << stt.texto << "\n";
 
-            cambiar_a(Estado::Slm);
-            ResultadoSlm slm = generar_respuesta(config_, dir, stt.texto);
-            metricas_.ms_slm = slm.ms;
-            metricas_.rss_slm_kb = slm.rss_kb;
-            if (!slm.ok) return fallar(slm.fallo);
-            std::cout << "  Jarvis: " << slm.texto << "\n";
+            std::string respuesta;
+            ContextoAtajo ctx;
+            ctx.ahora = std::time(nullptr);
+            ctx.ultima_respuesta = ultima_respuesta_;
+            ctx.rotacion = rotacion_++;
+            if (std::optional<Atajo> atajo = buscar_atajo(config_.atajos, stt.texto, ctx)) {
+                // Respuesta rápida: el SLM no se carga (ahorra RAM y tiempo).
+                respuesta = atajo->respuesta;
+                metricas_.ruta = (atajo->id == "bloqueo") ? "bloqueo" : "atajo";
+                salir_solicitado_ = atajo->terminar;
+                std::cout << "  Jarvis (respuesta rápida: " << atajo->id << "): " << respuesta
+                          << "\n";
+            } else {
+                cambiar_a(Estado::Slm);
+                ResultadoSlm slm = generar_respuesta(config_, dir, stt.texto);
+                metricas_.ms_slm = slm.ms;
+                metricas_.rss_slm_kb = slm.rss_kb;
+                if (!slm.ok) return fallar(slm.fallo);
+                respuesta = slm.texto;
+                std::cout << "  Jarvis: " << respuesta << "\n";
+            }
+            ultima_respuesta_ = respuesta;  // solo en memoria (para "repite")
 
             cambiar_a(Estado::Tts);
-            ResultadoTts tts = sintetizar_y_reproducir(config_, dir, slm.texto);
+            ResultadoTts tts = sintetizar_y_reproducir(config_, dir, respuesta);
             metricas_.ms_tts = tts.ms_sintesis;
             metricas_.ms_reproduccion = tts.ms_reproduccion;
             metricas_.rss_tts_kb = tts.rss_kb;

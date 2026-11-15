@@ -4,6 +4,8 @@
 #include <string>
 #include <vector>
 
+#include "jarvis/atajos.hpp"
+
 namespace jarvis {
 
 struct Perfil {
@@ -53,6 +55,9 @@ struct Config {
     // TTS.
     std::string motor_tts = "sherpa";  // "sherpa" o "termux" (solo demostración)
     bool permitir_respaldo_termux = false;
+
+    // Respuestas rápidas sin SLM (sección opcional "respuestas_rapidas").
+    ConfigAtajos atajos;
 
     std::string archivo_metricas;
 

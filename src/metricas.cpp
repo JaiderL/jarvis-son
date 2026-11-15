@@ -32,7 +32,7 @@ std::string campo(const std::string& s) {
 std::string encabezado_csv() {
     return "fecha,perfil,turno,estado,etapa_error,codigo_error,ms_grabacion,ms_conversion,"
            "ms_stt,ms_slm,ms_tts,ms_reproduccion,ms_total,duracion_audio_s,rtf_stt,"
-           "rss_ffmpeg_kb,rss_stt_kb,rss_slm_kb,rss_tts_kb,motor_tts";
+           "rss_ffmpeg_kb,rss_stt_kb,rss_slm_kb,rss_tts_kb,motor_tts,ruta";
 }
 
 std::string fila_csv(const MetricasTurno& m) {
@@ -56,7 +56,8 @@ std::string fila_csv(const MetricasTurno& m) {
     s += std::to_string(m.rss_stt_kb) + ",";
     s += std::to_string(m.rss_slm_kb) + ",";
     s += std::to_string(m.rss_tts_kb) + ",";
-    s += campo(m.motor_tts);
+    s += campo(m.motor_tts) + ",";
+    s += campo(m.ruta);
     return s;
 }
 
@@ -64,6 +65,20 @@ bool anexar_metricas(const std::string& ruta, const MetricasTurno& m) {
     std::error_code ec;
     fs::path p(ruta);
     if (p.has_parent_path()) fs::create_directories(p.parent_path(), ec);
+    // Si el archivo existe con otro encabezado (versión anterior del CSV), se
+    // conserva aparte con otro nombre y se empieza uno nuevo.
+    if (tamano_archivo(ruta) > 0) {
+        std::ifstream viejo(ruta);
+        std::string primera;
+        std::getline(viejo, primera);
+        if (primera != encabezado_csv()) {
+            viejo.close();
+            std::string destino = ruta + ".anterior";
+            for (int i = 1; existe_archivo(destino); ++i)
+                destino = ruta + ".anterior" + std::to_string(i);
+            fs::rename(ruta, destino, ec);
+        }
+    }
     const bool nuevo = tamano_archivo(ruta) <= 0;
     std::ofstream f(ruta, std::ios::app);
     if (!f) return false;
