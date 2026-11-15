@@ -17,7 +17,7 @@ assignees: ""
 
 ## Responsable
 
-Estudiante A / Estudiante B
+Estudiante Jaider / Estudiante Esteban
 
 ## Cómo se verifica
 
