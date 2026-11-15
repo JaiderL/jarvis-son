@@ -1,0 +1,20 @@
+Hola Jarvis, ¿cómo estás hoy?
+¿Qué hora es en este momento?
+¿Cuál es la capital de Colombia?
+Dime un dato curioso sobre el café.
+¿Cuántos días tiene un año bisiesto?
+Recomiéndame un libro para leer este fin de semana.
+¿Qué significa inteligencia artificial?
+Explícame qué es un modelo de lenguaje pequeño.
+¿Cómo se dice gracias en inglés?
+Dame una idea para el almuerzo de hoy.
+¿Cuál es el río más largo de Colombia?
+¿Qué temperatura hace normalmente en Medellín?
+Cuéntame un chiste corto.
+¿Para qué sirve la memoria RAM de un teléfono?
+¿Cuánto es doce por ocho?
+Dame un consejo para estudiar mejor.
+¿Qué es el reconocimiento de voz?
+¿En qué departamento queda la ciudad de Pereira?
+Nombra tres frutas tropicales.
+Gracias Jarvis, eso es todo por ahora.
