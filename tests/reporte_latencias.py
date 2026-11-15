@@ -68,10 +68,24 @@ def reportar(filas: list[dict], ultimos: int | None, perfil: str | None) -> dict
         print("No hay turnos exitosos para calcular percentiles.")
         return resultado
 
+    # Ruta de cada turno: "slm" (pasó por el modelo) o "atajo"/"bloqueo" (respuesta rápida).
+    rutas: dict[str, list[dict]] = {}
+    for f in exitosas:
+        rutas.setdefault(f.get("ruta") or "slm", []).append(f)
+    resultado["rutas"] = {r: len(v) for r, v in rutas.items()}
+    if len(rutas) > 1 or "slm" not in rutas:
+        partes = ", ".join(f"{r}: {len(v)}" for r, v in sorted(rutas.items()))
+        print(f"Turnos exitosos por ruta: {partes}")
+
     print()
     print(f"{'Etapa':<20} {'p50 (s)':>9} {'p95 (s)':>9} {'máx (s)':>9}")
     for columna, nombre in ETAPAS:
-        valores = [float(f[columna]) / 1000.0 for f in exitosas if f.get(columna, "") != ""]
+        # El SLM solo se mide en los turnos que lo usaron.
+        base = rutas.get("slm", []) if columna == "ms_slm" else exitosas
+        valores = [float(f[columna]) / 1000.0 for f in base if f.get(columna, "") != ""]
+        if not valores:
+            print(f"{nombre:<20} {'-':>9} {'-':>9} {'-':>9}")
+            continue
         p50, p95 = percentil(valores, 50), percentil(valores, 95)
         resultado[columna] = (p50, p95)
         print(f"{nombre:<20} {p50:9.2f} {p95:9.2f} {max(valores):9.2f}")
@@ -79,6 +93,13 @@ def reportar(filas: list[dict], ultimos: int | None, perfil: str | None) -> dict
     rtf = [float(f["rtf_stt"]) for f in exitosas if f.get("rtf_stt")]
     if rtf:
         print(f"{'RTF STT':<20} {percentil(rtf, 50):9.2f} {percentil(rtf, 95):9.2f} {max(rtf):9.2f}")
+
+    if len(rutas) > 1:
+        print()
+        print(f"{'Total por ruta':<20} {'p50 (s)':>9} {'p95 (s)':>9}")
+        for ruta, filas_ruta in sorted(rutas.items()):
+            valores = [float(f["ms_total"]) / 1000.0 for f in filas_ruta]
+            print(f"{ruta:<20} {percentil(valores, 50):9.2f} {percentil(valores, 95):9.2f}")
 
     print()
     print(f"{'Proceso':<20} {'memoria pico máx (MB)':>22}")
@@ -97,14 +118,17 @@ def autoprueba() -> int:
     csv_ejemplo = io.StringIO(
         "fecha,perfil,turno,estado,etapa_error,codigo_error,ms_grabacion,ms_conversion,"
         "ms_stt,ms_slm,ms_tts,ms_reproduccion,ms_total,duracion_audio_s,rtf_stt,"
-        "rss_ffmpeg_kb,rss_stt_kb,rss_slm_kb,rss_tts_kb,motor_tts\n"
-        "x,base,1,ok,,0,6000,100,2000,8000,1500,3000,20600,6.00,0.333,50000,150000,700000,120000,sherpa\n"
-        "x,base,2,ok,,0,6000,120,3000,9000,1600,3000,22720,6.00,0.500,51200,160000,720000,121000,sherpa\n"
-        "x,base,3,error,SLM,124,6000,110,2500,0,0,0,8610,6.00,0.417,50000,155000,0,0,\n"
+        "rss_ffmpeg_kb,rss_stt_kb,rss_slm_kb,rss_tts_kb,motor_tts,ruta\n"
+        "x,base,1,ok,,0,6000,100,2000,8000,1500,3000,20600,6.00,0.333,50000,150000,700000,120000,sherpa,slm\n"
+        "x,base,2,ok,,0,6000,120,3000,9000,1600,3000,22720,6.00,0.500,51200,160000,720000,121000,sherpa,slm\n"
+        "x,base,3,error,SLM,124,6000,110,2500,0,0,0,8610,6.00,0.417,50000,155000,0,0,,slm\n"
+        "x,base,4,ok,,0,6000,100,2000,0,1000,2000,11100,6.00,0.333,50000,150000,0,120000,sherpa,atajo\n"
     )
     r = reportar(leer_filas(csv_ejemplo), None, "base")
-    assert r["turnos"] == 3 and r["exitosos"] == 2
-    assert abs(r["ms_stt"][0] - 2.5) < 1e-9
+    assert r["turnos"] == 4 and r["exitosos"] == 3
+    assert r["rutas"] == {"slm": 2, "atajo": 1}
+    assert abs(r["ms_slm"][0] - 8.5) < 1e-9  # el atajo (0 ms) no cuenta para el SLM
+    assert abs(r["ms_stt"][0] - 2.0) < 1e-9
     assert abs(r["rss_slm_kb"] - 720000 / 1024) < 1e-9
     print("Autoprueba de reporte_latencias.py: OK")
     return 0
