@@ -3,6 +3,7 @@
 // siguiente: nunca hay dos modelos cargados a la vez.
 #pragma once
 
+#include <cstddef>
 #include <string>
 
 #include "jarvis/config.hpp"
@@ -22,6 +23,8 @@ public:
     Estado estado() const { return estado_; }
     const MetricasTurno& ultimas_metricas() const { return metricas_; }
     const Config& config() const { return config_; }
+    // true si una respuesta rápida pidió terminar la sesión (p. ej. "adiós").
+    bool salir_solicitado() const { return salir_solicitado_; }
 
 private:
     void cambiar_a(Estado nuevo);
@@ -31,6 +34,9 @@ private:
     bool guardar_metricas_;
     Estado estado_ = Estado::Listo;
     MetricasTurno metricas_;
+    std::string ultima_respuesta_;  // solo en memoria; nunca se guarda en disco
+    std::size_t rotacion_ = 0;      // rota entre respuestas rápidas alternativas
+    bool salir_solicitado_ = false;
 };
 
 }  // namespace jarvis
