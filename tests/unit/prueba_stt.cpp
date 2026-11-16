@@ -24,3 +24,14 @@ PRUEBA(argv_whisper_perfil_alto_usa_modelo_base) {
     VERIFICAR(siguiente(a, "-m").find("ggml-base.bin") != std::string::npos);
     VERIFICAR_IGUAL(siguiente(a, "-t"), std::string("6"));
 }
+
+PRUEBA(argv_whisper_incluye_prompt_inicial_y_beam_5) {
+    Config c = cargar_config(prueba::ruta_config(), "base");
+    auto a = argv_whisper(c, "/tmp/x.wav", "/tmp/salida");
+    VERIFICAR_IGUAL(siguiente(a, "-bs"), std::string("5"));
+    VERIFICAR_IGUAL(siguiente(a, "-bo"), std::string("5"));
+    // El prompt va como UN argumento separado y menciona "Jarvis".
+    VERIFICAR(siguiente(a, "--prompt").find("Jarvis") != std::string::npos);
+    c.prompt_stt.clear();
+    VERIFICAR(!contiene(argv_whisper(c, "/tmp/x.wav", "/tmp/s"), "--prompt"));
+}

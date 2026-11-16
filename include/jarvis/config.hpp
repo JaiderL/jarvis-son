@@ -47,6 +47,9 @@ struct Config {
     int timeout_tts_ms = 90000;
     int timeout_reproduccion_ms = 60000;
 
+    // STT: texto que orienta a whisper (vocabulario, idioma, puntuación).
+    std::string prompt_stt;
+
     // SLM.
     double temperatura = 0.3;
     std::string prompt_sistema;

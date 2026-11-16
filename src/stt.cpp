@@ -10,7 +10,7 @@ std::vector<std::string> argv_whisper(const Config& c, const std::string& wav,
                                       const std::string& base_salida) {
     const Perfil& p = c.perfil;
     // clang-format off
-    return {c.bin_whisper,
+    std::vector<std::string> a = {c.bin_whisper,
             "-m", p.modelo_stt,
             "-f", wav,
             "-l", "es",  // idioma fijo: español (evita que transcriba en inglés)
@@ -22,6 +22,12 @@ std::vector<std::string> argv_whisper(const Config& c, const std::string& wav,
             "-otxt",  // escribe <base_salida>.txt
             "-of", base_salida};
     // clang-format on
+    // Prompt inicial: va como un argumento separado (viene de config.json).
+    if (!c.prompt_stt.empty()) {
+        a.push_back("--prompt");
+        a.push_back(c.prompt_stt);
+    }
+    return a;
 }
 
 ResultadoStt transcribir(const Config& c, const DirTemporal& dir, const std::string& wav,

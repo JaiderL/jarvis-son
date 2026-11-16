@@ -205,6 +205,14 @@ Config cargar_config(const std::string& ruta, const std::string& perfil_pedido) 
     c.timeout_reproduccion_ms = entero(j, "tiempos_limite_s.reproduccion", 5, 600) * 1000;
 
     c.temperatura = real(j, "slm.temperatura", 0.0, 2.0);
+    // Prompt inicial de whisper (opcional): ayuda con nombres propios como "Jarvis".
+    if (const ValorJson* ps = j.buscar_ruta("stt.prompt_inicial")) {
+        if (ps->tipo != ValorJson::Tipo::Texto || ps->texto.size() > 300)
+            fallar("\"stt.prompt_inicial\" debe ser un texto de hasta 300 bytes");
+        for (unsigned char ch : ps->texto)
+            if (ch < 0x20) fallar("\"stt.prompt_inicial\" no puede tener caracteres de control");
+        c.prompt_stt = ps->texto;
+    }
     c.prompt_sistema = texto(j, "slm.prompt_sistema");
     for (const auto& a : requerir(j, "slm.args_extra_llama", ValorJson::Tipo::Arreglo).arreglo) {
         if (a.tipo != ValorJson::Tipo::Texto || !argumento_seguro(a.texto))
