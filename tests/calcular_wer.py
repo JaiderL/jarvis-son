@@ -19,14 +19,44 @@ import sys
 import unicodedata
 
 
+UNIDADES = ["cero", "uno", "dos", "tres", "cuatro", "cinco", "seis", "siete", "ocho", "nueve",
+            "diez", "once", "doce", "trece", "catorce", "quince", "dieciseis", "diecisiete",
+            "dieciocho", "diecinueve", "veinte", "veintiuno", "veintidos", "veintitres",
+            "veinticuatro", "veinticinco", "veintiseis", "veintisiete", "veintiocho",
+            "veintinueve"]
+DECENAS = {30: "treinta", 40: "cuarenta", 50: "cincuenta", 60: "sesenta", 70: "setenta",
+           80: "ochenta", 90: "noventa"}
+CENTENAS = {100: "cien", 200: "doscientos", 300: "trescientos", 400: "cuatrocientos",
+            500: "quinientos", 600: "seiscientos", 700: "setecientos", 800: "ochocientos",
+            900: "novecientos"}
+
+
+def numero_a_palabras(n: int) -> str:
+    """Convierte 0–999 a palabras en español sin tildes ("12" → "doce")."""
+    if n < 30:
+        return UNIDADES[n]
+    if n < 100:
+        decena, unidad = n - n % 10, n % 10
+        return DECENAS[decena] + ("" if unidad == 0 else " y " + UNIDADES[unidad])
+    if n % 100 == 0:
+        return CENTENAS[n]
+    base = "ciento" if n < 200 else CENTENAS[n - n % 100]
+    return base + " " + numero_a_palabras(n % 100)
+
+
 def normalizar(texto: str) -> list[str]:
-    """Minúsculas, sin tildes ni signos de puntuación; devuelve las palabras."""
+    """Minúsculas, sin tildes ni signos y con números en palabras; devuelve las palabras.
+
+    Los números se escriben con palabras porque whisper a veces escribe "12 por 8" y la
+    referencia dice "doce por ocho": significan lo mismo y no deben contar como error.
+    """
     texto = texto.lower().strip()
     # Quita tildes pero conserva la ñ.
     texto = texto.replace("ñ", "\0")
     texto = unicodedata.normalize("NFD", texto)
     texto = "".join(c for c in texto if unicodedata.category(c) != "Mn")
     texto = texto.replace("\0", "ñ")
+    texto = re.sub(r"\b\d{1,3}\b", lambda m: numero_a_palabras(int(m.group())), texto)
     texto = re.sub(r"[^\w\s]", " ", texto)
     return texto.split()
 
@@ -88,6 +118,12 @@ def evaluar(referencias: list[str], hipotesis: list[str], umbral: float, meta: i
 def autoprueba() -> int:
     assert normalizar("¿Qué HORA es?") == ["que", "hora", "es"]
     assert normalizar("Año, niño") == ["año", "niño"]
+    assert normalizar("12 por 8") == normalizar("doce por ocho")
+    assert normalizar("Nombra 3 frutas") == ["nombra", "tres", "frutas"]
+    assert numero_a_palabras(45) == "cuarenta y cinco"
+    assert numero_a_palabras(125) == "ciento veinticinco"
+    assert numero_a_palabras(300) == "trescientos"
+    assert wer("cuanto es doce por ocho", "Cuánto es 12 por 8.") == 0.0
     assert wer("hola mundo", "hola mundo") == 0.0
     assert wer("hola mundo", "hola") == 0.5
     assert wer("hola mundo", "hola mundo cruel") == 0.5
