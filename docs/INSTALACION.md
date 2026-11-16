@@ -383,9 +383,41 @@ bash scripts/probar_stt.sh --wer
 Salida esperada (final):
 
 ```
+[INFO] Perfil base | modelo models/ggml-tiny.bin | beam 5 | 95 s en total
 WER global: 9.50%
 Transcripciones utilizables (WER <= 30%): 19/20
 Meta >= 18/20: CUMPLE
+```
+
+Los 20 audios quedan guardados en `logs/wer_audios/` (solo las frases de referencia). Así puede
+**comparar configuraciones con exactamente las mismas grabaciones**, sin volver a leer las frases:
+
+```bash
+bash scripts/probar_stt.sh base --wer-reusar
+```
+
+```bash
+bash scripts/probar_stt.sh alto --wer-reusar
+```
+
+#### Si no llega a 18/20
+
+1. **Grabe en buenas condiciones:** habitación callada, teléfono a 15–20 cm de la boca, sin tapar
+   el micrófono, y empiece a hablar justo después de "Hable ahora". Hable a ritmo normal.
+2. **Ajuste el prompt inicial** (`stt.prompt_inicial` en `config/config.json`). Whisper usa ese
+   texto como contexto: escriba ahí los nombres propios que más se equivoca (p. ej. "Jarvis",
+   nombres de ciudades) y vuelva a medir con `--wer-reusar`.
+3. **Beam:** `stt_beam` en el perfil (5 por defecto). Más alto = un poco más preciso y más lento.
+4. **Modelo más grande:** `bash scripts/descargar_modelos.sh alto` y luego
+   `bash scripts/probar_stt.sh alto --wer-reusar` usa whisper *base* con los mismos audios. Ocupa
+   ~150 MB de RAM extra y tarda ~2× más, pero como las etapas no se solapan, también cabe en el
+   teléfono de 3 GB. Si mejora la meta, consulte con el docente si se puede usar *base* en el
+   perfil `base` (en `config.json`, `perfiles.base.modelo_stt`).
+
+Para borrar los audios de prueba:
+
+```bash
+rm -rf logs/wer_audios
 ```
 
 ### 5.5 Probar SLM (Qwen3.5 con llama.cpp)
@@ -630,6 +662,7 @@ Salida esperada: los 3 turnos terminan en `[LISTO]` sin errores, igual que con r
 |---|---|---|
 | `termux-battery-status` o `probar_api.sh` se queda colgado / "sin respuesta en 10 s" | Falta la **app** Termux:API, no se ha abierto nunca, o Termux y Termux:API vienen de fuentes distintas | Instale ambas desde F-Droid, abra Termux:API una vez, batería "Sin restricciones". Ejecute `pkg install termux-api` |
 | La compilación se corta, Termux se cierra o aparece `Killed` / código 137 | Android mató el proceso por falta de RAM (OOM) | Cierre otras apps, `termux-wake-lock`, cargador conectado y `JOBS=1 bash scripts/instalar.sh` (retoma donde quedó) |
+| WER por debajo de 18/20 ("Jarvis" sale como "Jeremy", "bisiesto" como "fiesto") | Modelo tiny pequeño, ruido o nombres propios desconocidos | Ver "Si no llega a 18/20" en la sección 5.4: prompt inicial con los nombres, beam 5, grabar en silencio y comparar con `--wer-reusar` |
 | Whisper transcribe en inglés o traduce | Modelo `.en` o falta `-l es` | Use `ggml-tiny.bin` (multilingüe, **no** `ggml-tiny.en.bin`); el orquestador siempre pasa `-l es` y rechaza modelos `.en` |
 | `llama-completion`: `unknown model architecture`, `invalid argument` o el modelo no carga | Versión de llama.cpp distinta a la fijada (v1.0.0) o GGUF dañado | `git pull` y `bash scripts/instalar.sh --forzar`; vuelva a ejecutar `descargar_modelos.sh` (verifica SHA-256) |
 | La respuesta trae razonamiento en inglés o `<think>` | Se cambió el formato del prompt | El orquestador usa `-no-cnv` con el bloque `<think></think>` vacío; no agregue `--jinja` ni `-sys` (ver DECISIONES.md) |
