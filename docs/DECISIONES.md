@@ -147,3 +147,32 @@ el teléfono real.
   temas bloqueados, configuración inválida) e integración (el "SLM" es un binario que falla, y el
   turno con "hola" igual termina bien porque nunca lo ejecuta). 📱 Medir el ahorro real en el
   teléfono comparando `ms_total` por ruta en `prueba_aceptacion.sh`.
+
+## D14. Mejoras de precisión de STT: beam 5, prompt inicial y números en el WER
+
+- **Contexto:** en el teléfono real (Termux, voz humana) dos corridas de `probar_stt.sh --wer`
+  dieron **15/20** utilizables (meta 18/20). Los fallos: "Jarvis" → "Jeremy/harbis/Gervi",
+  "bisiesto" → "fiesto", "doce por ocho" → "12 por 8" y "tres" → "3".
+- **Experimento (✅ Linux, las 20 frases con voz sintética + ruido rosa + filtro telefónico):**
+
+  | Configuración | Utilizables | WER global | Tiempo 20 frases |
+  |---|---|---|---|
+  | tiny, beam 1 (anterior) | 11/20 | 28,9 % | 10,3 s |
+  | tiny, beam 5 | 13/20 | 23,4 % | 10,8 s |
+  | tiny, beam 1 + prompt | 12/20 | 28,1 % | 10,6 s |
+  | tiny, beam 5 + prompt | 14/20 | 20,3 % | 11,5 s |
+  | tiny, beam 5 + prompt + números normalizados | **15/20** | 18,8 % | 13 s |
+  | base, beam 5 + prompt + números normalizados | 16/20 | 14,8 % | 20 s |
+
+- **Decisiones:**
+  1. `stt_beam` = 5 en ambos perfiles (es el valor por defecto de whisper.cpp; antes usábamos 1
+     por velocidad). Costo medido: ~+12 % de tiempo de STT.
+  2. `stt.prompt_inicial` en `config.json`, pasado a `whisper-cli --prompt` como argumento
+     separado. Incluye "Jarvis" para que reconozca el nombre.
+  3. `calcular_wer.py` escribe los números con palabras antes de comparar ("12" = "doce"), porque
+     significan lo mismo y no son un error de reconocimiento.
+  4. `probar_stt.sh --wer` guarda los audios en `logs/wer_audios/` y `--wer-reusar` los vuelve a
+     transcribir: así se comparan configuraciones con las mismas grabaciones.
+- **Pendiente 📱:** volver a medir en el teléfono. Si sigue por debajo de 18/20, la opción con más
+  impacto es whisper *base* (+150 MB de RAM, ~2× tiempo); usarlo en el perfil `base` requiere
+  consultarlo con el docente, que pidió *tiny*.
