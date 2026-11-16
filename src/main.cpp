@@ -3,6 +3,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <ctime>
+#include <filesystem>
 #include <iostream>
 #include <optional>
 #include <stdexcept>
@@ -33,6 +34,8 @@ Opciones:
   --wav RUTA        Usa este audio en lugar del micrófono
   --prueba ETAPA    Prueba una sola etapa: captura | stt | atajo | slm | tts
   --texto TEXTO     Texto de entrada para --prueba atajo, slm o tts
+  --guardar-wav RUTA  Con --prueba captura|stt: guarda una copia del WAV de 16 kHz
+                    (solo para pruebas de calidad; el orquestador nunca guarda audio)
   --sin-metricas    No escribe logs/metricas.csv
   --version         Muestra la versión
   --ayuda           Muestra esta ayuda
@@ -47,7 +50,7 @@ bool es_entero(const std::string& s) {
 }
 
 int prueba_etapa(const jarvis::Config& c, const std::string& etapa, const std::string& wav,
-                 const std::string& texto) {
+                 const std::string& texto, const std::string& guardar_wav) {
     using namespace jarvis;
     DirTemporal dir("jarvis-prueba");
     if (etapa == "captura" || etapa == "stt") {
@@ -58,6 +61,17 @@ int prueba_etapa(const jarvis::Config& c, const std::string& etapa, const std::s
         }
         std::printf("CAPTURA_OK duracion_s=%.2f rms=%.1f ms_grabacion=%ld ms_conversion=%ld\n",
                     cap.duracion_s, cap.rms, cap.ms_grabacion, cap.ms_conversion);
+        if (!guardar_wav.empty()) {
+            std::error_code ec;
+            std::filesystem::copy_file(cap.wav, guardar_wav,
+                                       std::filesystem::copy_options::overwrite_existing, ec);
+            if (ec) {
+                std::cerr << "No se pudo guardar el WAV en " << guardar_wav << ": " << ec.message()
+                          << "\n";
+                return 1;
+            }
+            std::cout << "WAV_GUARDADO: " << guardar_wav << "\n";
+        }
         if (etapa == "captura") return 0;
         ResultadoStt stt = transcribir(c, dir, cap.wav, cap.duracion_s);
         if (!stt.ok) {
@@ -116,6 +130,7 @@ int main(int argc, char** argv) {
     std::string wav;
     std::string etapa;
     std::string texto;
+    std::string guardar_wav;
     int turnos = 0;
     bool automatico = false;
     bool metricas = true;
@@ -139,6 +154,8 @@ int main(int argc, char** argv) {
             etapa = valor("--prueba");
         else if (a == "--texto")
             texto = valor("--texto");
+        else if (a == "--guardar-wav")
+            guardar_wav = valor("--guardar-wav");
         else if (a == "--turnos") {
             std::string n = valor("--turnos");
             if (!es_entero(n)) {
@@ -171,7 +188,7 @@ int main(int argc, char** argv) {
     }
     jarvis::instalar_manejador_senales();
 
-    if (!etapa.empty()) return prueba_etapa(config, etapa, wav, texto);
+    if (!etapa.empty()) return prueba_etapa(config, etapa, wav, texto, guardar_wav);
 
     std::cout << "Jarvis-son " << kVersion << " | perfil: " << config.perfil.nombre
               << " | hilos: " << config.perfil.hilos << " | contexto: " << config.perfil.contexto
